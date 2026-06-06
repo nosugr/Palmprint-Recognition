@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# 运行期产物
+palmprint.db
+
+# 数据与生成物：协作者用 scripts/download_dataset.py 拉取、calibrate.py 复现
+# 保留 data/README.md 与 data/reports/（标定结果与 ROC/DET，开箱即用）
+data/*
+!data/README.md
+!data/reports/
+
+# 个人 AI 工具配置（与项目复现无关）
+.agents/
+skills-lock.json
+
+# 系统
+.DS_Store

@@ -1,0 +1,5 @@
+{
+  "dataset": "data/raw/palm_roi/tongji_roi",
+  "templates": 3000,
+  "persons": 150
+}

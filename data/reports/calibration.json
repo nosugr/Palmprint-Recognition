@@ -1,0 +1,17 @@
+{
+  "dataset": "/Users/grtsinry43/biometrics/data/raw/palm_roi/tongji_roi",
+  "protocol": "cross-session",
+  "pre_extracted": true,
+  "persons": 150,
+  "templates": 3000,
+  "genuine_pairs": 15000,
+  "impostor_pairs": 9000,
+  "eer": 0.0093,
+  "threshold": 0.4284,
+  "far_at_eer": 0.0097,
+  "frr_at_eer": 0.0089,
+  "top1_accuracy": 0.9527,
+  "top1_probes": 1500,
+  "roc_plot": "/Users/grtsinry43/biometrics/data/reports/roc.png",
+  "det_plot": "/Users/grtsinry43/biometrics/data/reports/det.png"
+}
