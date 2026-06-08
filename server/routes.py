@@ -11,8 +11,10 @@ import config
 from algorithm.encode import encode
 from algorithm.matcher import match_confidence, match_distance
 from algorithm.preprocess import finalize_patch, to_gray
-from algorithm.roi import extract_palm_roi_ex
+from algorithm.roi import debug_geometry, extract_palm_roi_ex
 from algorithm.template import mask_array
+from hardware.camera import SwitchableCamera
+from hardware.probe import probe_cameras
 from storage.repository import Repository
 
 api = Blueprint("api", __name__)
@@ -35,26 +37,32 @@ def _services():
 
 
 def _capture_encode():
-    """抓多帧 → 各自做 ROI 提取 → 选纹路最清晰的一帧编码。
+    """抓多帧 → 各自做 ROI 提取 → 选综合质量最好的一帧编码。
 
     单帧自动 ROI 约 30% 会失败；多帧选优把成功率拉高，并选出配准/清晰度最好的
     那帧，提升匹配一致性。全部失败时抛出带具体原因的 RuntimeError 供上层拒识。
+
+    选优评分 = 有效掩码占比 × 清晰度（拉普拉斯方差），兼顾 ROI 覆盖与对焦质量。
     """
     repo, camera, _ = _services()
     del repo
 
-    best = None  # (roi_quality, patch, patch_mask)
+    best = None  # (composite_score, patch, patch_mask)
     reasons: list[str] = []
     got_frame = False
+    success_count = 0
     for i in range(config.CAPTURE_FRAMES):
         frame = camera.read()
         if frame is None:
             continue
         got_frame = True
-        res = extract_palm_roi_ex(to_gray(frame))
+        res = extract_palm_roi_ex(to_gray(frame), bgr=frame)
         if res.ok:
-            if best is None or res.quality > best[0]:
-                best = (res.quality, res.roi, res.mask, frame)
+            success_count += 1
+            mask_ratio = float(mask_array(res.mask).mean()) if res.mask is not None else 0.0
+            score = mask_ratio * res.quality
+            if best is None or score > best[0]:
+                best = (score, res.roi, res.mask, frame)
         else:
             reasons.append(res.reason)
         if i < config.CAPTURE_FRAMES - 1:
@@ -63,7 +71,6 @@ def _capture_encode():
     if not got_frame:
         raise RuntimeError("camera read failed")
     if best is None:
-        # 取出现最多的失败原因作为提示
         reason = max(set(reasons), key=reasons.count) if reasons else "未检测到清晰掌纹，请重新放手"
         raise RuntimeError(reason)
 
@@ -187,14 +194,15 @@ def preview_status():
     _, camera, _ = _services()
     frame = camera.read()
     if frame is None:
-        return _ok({"ready": False, "status": "no_camera", "reason": "摄像头未就绪", "quality": 0.0})
-    res = extract_palm_roi_ex(to_gray(frame))
+        return _ok({"ready": False, "status": "no_camera", "reason": "摄像头未就绪", "quality": 0.0, "solidity": None})
+    geo = debug_geometry(to_gray(frame), bgr=frame)
     return _ok(
         {
-            "ready": res.ok,
-            "status": res.status,
-            "reason": res.reason,
-            "quality": round(res.quality, 2),
+            "ready": geo["status"] == "ok",
+            "status": geo["status"],
+            "reason": geo["reason"],
+            "quality": geo["quality"],
+            "solidity": geo["solidity"],
         }
     )
 
@@ -207,6 +215,54 @@ def logs():
     return _ok(repo.list_logs(limit))
 
 
+@api.get("/cameras")
+def cameras():
+    """探测可用摄像头列表 + 当前正在使用的索引。
+
+    探测会独占式打开设备，故跳过当前正在使用的索引（否则会把实时画面抢断），
+    该索引单独用当前摄像头的状态合成一条。
+    """
+    _, camera, _ = _services()
+    current_index = getattr(camera, "current_index", None)
+    indices = [i for i in range(config.CAMERA_PROBE_COUNT) if i != current_index]
+    cams = probe_cameras(indices)
+    if current_index is not None:
+        # 正在使用的摄像头无法重复打开探测，直接读一帧拿真实分辨率。
+        frame = camera.read()
+        h, w = (frame.shape[:2] if frame is not None else (0, 0))
+        cams.append(
+            {
+                "index": current_index,
+                "available": camera.is_open(),
+                "width": int(w),
+                "height": int(h),
+            }
+        )
+    cams.sort(key=lambda c: c["index"])
+    return _ok({"cameras": cams, "current_index": current_index})
+
+
+@api.post("/camera/select")
+def camera_select():
+    """切换到指定摄像头索引，成功后持久化为下次启动的默认。"""
+    _, camera, _ = _services()
+    body = request.get_json(silent=True) or {}
+    if "index" not in body:
+        return _err("index is required")
+    try:
+        index = int(body["index"])
+    except (TypeError, ValueError):
+        return _err("index must be an integer")
+
+    if not isinstance(camera, SwitchableCamera):
+        return _err("camera does not support switching")
+    if not camera.switch(index):
+        return _err(f"failed to open camera {index}")
+
+    config.save_default_camera_index(index)
+    return _ok({"index": index})
+
+
 @api.get("/health")
 def health():
     repo, camera, bridge = _services()
@@ -214,6 +270,6 @@ def health():
         {
             "db": True,
             "camera": camera.is_open(),
-            "hardware": bridge.is_alive(),
+            "hardware": bridge.status(),
         }
     )

@@ -41,16 +41,26 @@ class RoiResult:
 
 
 _REASONS = {
-    "no_hand": "未检测到手掌，请将手放入框内",
-    "bad_pose": "请张开五指、手掌正对摄像头",
-    "out_of_bounds": "手离镜头太近或太偏，请居中并保持距离",
-    "ok": "手掌位置良好",
+    "no_hand": "请将手掌放入框内",
+    "bad_pose": "请将五指张开的手掌正对摄像头",
+    "out_of_bounds": "请将手掌移到画面中央，保持适当距离",
+    "ok": "手掌位置良好，可以开始",
 }
 
 
 def _roi_quality(patch: np.ndarray) -> float:
     """纹路清晰度评分：拉普拉斯方差（对焦/对比度代理），越大越好。"""
     return float(cv2.Laplacian(patch, cv2.CV_64F).var())
+
+
+def _solidity(contour: np.ndarray) -> float:
+    """轮廓实心度 = 轮廓面积 / 凸包面积。张开五指因指缝凹陷而偏低（≈0.6–0.75），
+    圆/拳头/脸等凸物体接近 1.0，用于排除占满画面的非张开手掌。"""
+    area = cv2.contourArea(contour)
+    hull_area = cv2.contourArea(cv2.convexHull(contour))
+    if hull_area < 1e-6:
+        return 1.0
+    return float(area / hull_area)
 
 
 def _largest_contour(mask: np.ndarray) -> np.ndarray | None:
@@ -60,13 +70,35 @@ def _largest_contour(mask: np.ndarray) -> np.ndarray | None:
     return max(contours, key=cv2.contourArea)
 
 
-def segment_hand_mask(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
+def _skin_mask(img: np.ndarray) -> np.ndarray:
+    """HSV 肤色检测 → 二值掩码。输入灰度或 BGR 图。
+
+    范围说明（覆盖黄/白/棕/黑种人 + 反光/阴影区域）：
+    - H: 0-60  覆盖红→黄→橙色相（肤色主区间）
+    - S: 15-255 低饱和度覆盖反光/高光区域（掌心反光时 S 很低）
+    - V: 35-255 低亮度覆盖阴影区域（手指缝隙/手腕阴影）
+    """
+    if img.ndim == 2:
+        return np.ones_like(img, dtype=np.uint8) * 255
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    lower = np.array([0, 15, 35], dtype=np.uint8)
+    upper = np.array([60, 255, 255], dtype=np.uint8)
+    mask = cv2.inRange(hsv, lower, upper)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    return mask
+
+
+def segment_hand_mask(gray: np.ndarray, bgr: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray | None]:
     """分割手掌区域。暗背景场景：手掌比背景亮。"""
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     if binary.mean() > 127:  # 前景被判反则取反，保证手掌为白
         binary = cv2.bitwise_not(binary)
+
+    skin = _skin_mask(bgr if bgr is not None else gray)
+    binary = cv2.bitwise_and(binary, skin)
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
@@ -123,6 +155,7 @@ def _finger_keypoints(
     contour: np.ndarray,
     center: tuple[float, float],
     radius: float,
+    debug: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray] | None:
     """检测食指-中指缝、无名指-小指缝两个关键点 X1, X2（图像坐标）。
 
@@ -159,20 +192,20 @@ def _finger_keypoints(
         i for i in maxima
         if dist_sm[i] > 1.0 * radius and abs(ang_s[i]) < np.radians(170)
     ]
-    if len(maxima) < 4:
+    if len(maxima) < config.ROI_FINGER_MIN_TIPS:
         return None
 
     # 合并同一指尖的「双峰」：角度相近者并为一个（保留更远的）
     maxima.sort(key=lambda i: ang_s[i])
     merged: list[int] = []
-    min_sep = 0.22  # rad ≈ 12.6°，小于该角距视为同一手指
+    min_sep = config.ROI_FINGER_MERGE_SEP  # rad，原硬编码 0.22，放宽以容忍光照不均
     for i in maxima:
         if merged and ang_s[i] - ang_s[merged[-1]] < min_sep:
             if dist_sm[i] > dist_sm[merged[-1]]:
                 merged[-1] = i
             continue
         merged.append(i)
-    if len(merged) < 4:
+    if len(merged) < config.ROI_FINGER_MIN_TIPS:
         return None
 
     # 取最显著的 5 个手指再按角度排
@@ -190,11 +223,13 @@ def _finger_keypoints(
             fingers = maxima[:-1]  # 拇指在右端
     else:
         fingers = maxima  # 仅 4 指（拇指未张开/未检出），视为食/中/无名/小
-    if len(fingers) < 4:
+    if len(fingers) < config.ROI_FINGER_MIN_TIPS:
         return None
-    fingers = fingers[:4]
+    fingers = fingers[:max(4, config.ROI_FINGER_MIN_TIPS)]
+    if debug is not None:
+        debug["fingertips"] = [pts_s[i] for i in fingers]
 
-    # 在相邻手指之间各找一个谷点（极小）
+    # 在相邻手指之间各找一个谷点（极小），并校验指缝足够深
     valleys: list[np.ndarray] = []
     for a, b in zip(fingers[:-1], fingers[1:]):
         lo, hi = min(a, b), max(a, b)
@@ -202,14 +237,20 @@ def _finger_keypoints(
         if len(seg) == 0:
             return None
         vidx = lo + int(np.argmin(seg))
+        if debug is not None:
+            debug.setdefault("valleys", []).append(pts_s[vidx])
+        # 指缝深度门：谷点距离须明显小于相邻指尖，否则是圆/拳头边缘的"假指缝"
+        tip_val = min(dist_sm[a], dist_sm[b])
+        if tip_val <= 1e-6 or dist_sm[vidx] >= config.ROI_MAX_VALLEY_RATIO * tip_val:
+            return None
         valleys.append(pts_s[vidx])
-    if len(valleys) < 3:
-        return None
-
     # 4 指 3 谷：外侧两谷 = 食中缝 & 无名小缝
-    x1 = valleys[0]
-    x2 = valleys[-1]
-    return x1, x2
+    # 3 指 2 谷：食中缝 & 中无名缝
+    if len(valleys) >= 2:
+        x1 = valleys[0]
+        x2 = valleys[-1]
+        return x1, x2
+    return None
 
 
 def _warp_roi_from_keypoints(
@@ -256,12 +297,29 @@ def _warp_roi_from_keypoints(
     return patch, patch_mask
 
 
-def extract_palm_roi_ex(gray: np.ndarray) -> RoiResult:
+def guide_box(w: int, h: int) -> tuple[int, int, int, int]:
+    """由 config 比例算出引导框像素范围 (x0, y0, x1, y1)，并裁剪到画面内。"""
+    side = config.ROI_GUIDE_SIDE * w
+    cx, cy = config.ROI_GUIDE_CX * w, config.ROI_GUIDE_CY * h
+    x0 = max(0, int(round(cx - side / 2)))
+    y0 = max(0, int(round(cy - side / 2)))
+    x1 = min(w, int(round(cx + side / 2)))
+    y1 = min(h, int(round(cy + side / 2)))
+    return x0, y0, x1, y1
+
+
+def extract_palm_roi_ex(gray: np.ndarray, bgr: np.ndarray | None = None) -> RoiResult:
     """Zhang 方案，带诊断：分割 → 掌心 → 指缝关键点 → 局部坐标系裁 ROI。
 
     返回 RoiResult，标明成功/失败原因，便于实时引导与多帧选优。
+    检测只在引导框区域内进行，排除框外人脸等干扰。
     """
-    hand_mask, contour = segment_hand_mask(gray)
+    H, W = gray.shape[:2]
+    gx0, gy0, gx1, gy1 = guide_box(W, H)
+    gray = gray[gy0:gy1, gx0:gx1]  # 之后所有处理都在引导框裁剪图上
+    bgr_crop = bgr[gy0:gy1, gx0:gx1] if bgr is not None else None
+
+    hand_mask, contour = segment_hand_mask(gray, bgr_crop)
     if contour is None:
         return RoiResult("no_hand", _REASONS["no_hand"])
 
@@ -272,6 +330,11 @@ def extract_palm_roi_ex(gray: np.ndarray) -> RoiResult:
         return RoiResult("no_hand", _REASONS["no_hand"])
     if not (0.10 * w < center[0] < 0.90 * w and 0.10 * h < center[1] < 0.97 * h):
         return RoiResult("out_of_bounds", _REASONS["out_of_bounds"])
+
+    # 实心度门：圆/拳头/脸等占满画面的凸物体 solidity≈1，张开五指因指缝凹陷而偏低。
+    # 过高直接判为"未张开五指/非手掌"，挡住"东西占满框就显示位置良好"的误判。
+    if _solidity(contour) > config.ROI_MAX_SOLIDITY:
+        return RoiResult("bad_pose", _REASONS["bad_pose"])
 
     kp = _finger_keypoints(contour, center, radius)
     if kp is None:
@@ -285,12 +348,53 @@ def extract_palm_roi_ex(gray: np.ndarray) -> RoiResult:
     return RoiResult("ok", _REASONS["ok"], roi=patch, mask=patch_mask, quality=_roi_quality(patch))
 
 
-def extract_palm_roi(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
+def extract_palm_roi(gray: np.ndarray, bgr: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray] | None:
     """Zhang 方案：分割 → 掌心 → 指缝关键点 → 局部坐标系裁 ROI。失败返回 None。"""
-    res = extract_palm_roi_ex(gray)
+    res = extract_palm_roi_ex(gray, bgr)
     if res.ok and res.roi is not None and res.mask is not None:
         return res.roi, res.mask
     return None
+
+
+def debug_geometry(gray: np.ndarray, bgr: np.ndarray | None = None) -> dict:
+    """返回供前端可视化的检测几何：轮廓、掌心+内切圆、指尖、指缝、solidity 与状态。
+
+    用于调试叠加层与 preview_status 的 solidity 读出，便于看清"后端把什么当成手"。
+    检测在引导框裁剪图上进行，坐标平移回整帧供叠加层绘制。
+    """
+    H, W = gray.shape[:2]
+    gx0, gy0, gx1, gy1 = guide_box(W, H)
+    crop = gray[gy0:gy1, gx0:gx1]
+    bgr_crop = bgr[gy0:gy1, gx0:gx1] if bgr is not None else None
+
+    res = extract_palm_roi_ex(gray, bgr)  # 内部已自裁剪，状态判定与采集保持一致
+    out: dict = {
+        "status": res.status,
+        "reason": res.reason,
+        "quality": round(res.quality, 2),
+        "solidity": None,
+        "contour": None,
+        "center": None,
+        "radius": 0.0,
+        "fingertips": [],
+        "valleys": [],
+        "guide_box": [gx0, gy0, gx1, gy1],
+    }
+
+    mask, contour = segment_hand_mask(crop, bgr_crop)
+    if contour is None:
+        return out
+    off = np.array([gx0, gy0])
+    out["contour"] = contour + off  # 平移回整帧
+    out["solidity"] = round(_solidity(contour), 3)
+    center, radius = palm_center(mask)
+    out["center"] = (center[0] + gx0, center[1] + gy0)
+    out["radius"] = radius
+    dbg: dict = {}
+    _finger_keypoints(contour, center, radius, dbg)
+    out["fingertips"] = [p + off for p in dbg.get("fingertips", [])]
+    out["valleys"] = [p + off for p in dbg.get("valleys", [])]
+    return out
 
 
 def center_square_crop(gray: np.ndarray) -> np.ndarray:

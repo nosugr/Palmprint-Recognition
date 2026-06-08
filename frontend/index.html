@@ -1,10 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>掌纹识别门禁</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <script>
+      // 在 Vue 挂载前解析主题，使首帧即匹配用户偏好。默认亮色；仅当用户显式
+      // 切换过（localStorage 有记录）才采用其选择，刻意忽略 prefers-color-scheme，
+      // 保证首次体验一致。
+      (function () {
+        try {
+          var saved = localStorage.getItem('palmprint-theme');
+          if (saved === 'dark') document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

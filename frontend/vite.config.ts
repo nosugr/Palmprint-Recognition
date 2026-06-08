@@ -20,8 +20,8 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/api': 'http://localhost:5001',
-      '/video_feed': 'http://localhost:5001',
+      '/api': 'http://localhost:5000',
+      '/video_feed': 'http://localhost:5000',
     },
   },
 })

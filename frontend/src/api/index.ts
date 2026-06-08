@@ -24,6 +24,7 @@ export interface PreviewStatus {
   status: string
   reason: string
   quality: number
+  solidity: number | null
 }
 
 export interface LogRow {
@@ -34,6 +35,32 @@ export interface LogRow {
   distance: number
   threshold: number
   created_at: string
+}
+
+export interface CameraInfo {
+  index: number
+  available: boolean
+  width: number
+  height: number
+}
+
+export interface CamerasResp {
+  cameras: CameraInfo[]
+  current_index: number | null
+}
+
+export interface HardwareStatus {
+  enabled: boolean
+  connected: boolean
+  port: string | null
+  baudrate: number | null
+  error: string | null
+}
+
+export interface HealthResp {
+  db: boolean
+  camera: boolean
+  hardware: HardwareStatus
 }
 
 interface ApiEnvelope<T> {
@@ -77,6 +104,15 @@ export const api = {
     return request<LogRow[]>(`/api/logs?limit=${limit}`)
   },
   health() {
-    return request<{ db: boolean; camera: boolean; hardware: boolean }>('/api/health')
+    return request<HealthResp>('/api/health')
+  },
+  cameras() {
+    return request<CamerasResp>('/api/cameras')
+  },
+  selectCamera(index: number) {
+    return request<{ index: number }>('/api/camera/select', {
+      method: 'POST',
+      body: JSON.stringify({ index }),
+    })
   },
 }

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, request
 
 import config
 from hardware.bridge import create_bridge
@@ -26,10 +26,11 @@ def create_app(
 
     repo = Repository()
     fallback = camera_fallback or (config.BASE_DIR / "data" / "demo" / "person_000")
+    cam_index = config.get_default_camera_index()
     try:
-        camera = create_camera(prefer_webcam=True, fallback_dir=fallback)
+        camera = create_camera(prefer_webcam=True, fallback_dir=fallback, index=cam_index)
     except RuntimeError:
-        camera = create_camera(prefer_webcam=False, fallback_dir=fallback)
+        camera = create_camera(prefer_webcam=False, fallback_dir=fallback, index=cam_index)
 
     bridge = create_bridge(use_serial=use_serial)
 
@@ -41,7 +42,9 @@ def create_app(
 
     @app.get("/video_feed")
     def video_feed():
-        return video_feed_response(app.extensions["camera"])
+        # ?debug=1 时叠加手掌检测几何（轮廓/掌心/指尖/指缝），用于实时查看识别结果
+        debug = request.args.get("debug") in ("1", "true", "yes")
+        return video_feed_response(app.extensions["camera"], debug=debug)
 
     @app.teardown_appcontext
     def _shutdown(_exc=None):

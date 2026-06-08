@@ -26,6 +26,9 @@ class HardwareBridge(ABC):
     @abstractmethod
     def indicate(self, success: bool) -> None: ...
 
+    @abstractmethod
+    def status(self) -> dict: ...
+
 
 class MockBridge(HardwareBridge):
     def connect(self) -> None:
@@ -43,25 +46,40 @@ class MockBridge(HardwareBridge):
     def indicate(self, success: bool) -> None:
         logger.info("[MockBridge] %s", "OK" if success else "FAIL")
 
+    def status(self) -> dict:
+        return {
+            "enabled": False,
+            "connected": False,
+            "port": None,
+            "baudrate": None,
+            "error": None,
+        }
+
 
 class SerialBridge(HardwareBridge):
     def __init__(self, port: str | None = None, baud: int | None = None) -> None:
         self._port = port or config.SERIAL_PORT
         self._baud = baud if baud is not None else config.SERIAL_BAUD
         self._ser = None
+        self._connect_error: str | None = None
 
     def connect(self) -> None:
         import serial
         from serial.tools import list_ports
 
         port = self._port
-        if port == "auto":
-            ports = list(list_ports.comports())
-            if not ports:
-                raise RuntimeError("no serial port found")
-            port = ports[0].device
-        self._ser = serial.Serial(port, self._baud, timeout=1)
-        logger.info("[SerialBridge] open %s @ %s", port, self._baud)
+        try:
+            if port == "auto":
+                ports = list(list_ports.comports())
+                if not ports:
+                    raise RuntimeError("no serial port found")
+                port = ports[0].device
+            self._ser = serial.Serial(port, self._baud, timeout=1)
+            self._connect_error = None
+            logger.info("[SerialBridge] open %s @ %s", port, self._baud)
+        except Exception as exc:
+            self._connect_error = str(exc)
+            raise
 
     def close(self) -> None:
         if self._ser and self._ser.is_open:
@@ -88,6 +106,16 @@ class SerialBridge(HardwareBridge):
 
     def indicate(self, success: bool) -> None:
         self._send("OK\n" if success else "FAIL\n")
+
+    def status(self) -> dict:
+        connected = self._ser is not None and self._ser.is_open
+        return {
+            "enabled": True,
+            "connected": connected,
+            "port": self._port,
+            "baudrate": self._baud,
+            "error": None if connected else (self._connect_error or "串口未连接"),
+        }
 
 
 def create_bridge(use_serial: bool = False) -> HardwareBridge:

@@ -29,6 +29,20 @@ ROI_BOX: tuple[int, int, int, int] | None = None  # (x, y, w, h) 像素
 ROI_PALM_SCALE = 1.20
 ROI_PALM_OFFSET = 0.40
 
+# 掌纹识别引导框：检测/轮廓只在此正方形区域内进行，排除框外的人脸等干扰。
+# 必须与前端 CameraView.vue 的 .guide 几何严格一致（见 docs 计划书）。
+ROI_GUIDE_CX = 0.5     # 框中心 x（占画面宽比例）
+ROI_GUIDE_CY = 0.5     # 框中心 y（占画面高比例）
+ROI_GUIDE_SIDE = 0.58  # 正方形边长 = ROI_GUIDE_SIDE × 画面宽（像素）
+
+# 非手掌排除：防止圆/拳头/脸/杯子等占满画面的凸物体被误判为"位置良好"。
+# solidity = 轮廓面积 / 凸包面积；张开五指有深指缝 ≈ 0.6–0.75，凸物体 ≈ 1.0。
+ROI_MAX_SOLIDITY = 0.90       # 高于该值判为"未张开五指/非手掌"，拒识（放宽以容忍手指张开不足）
+# 指缝深度：谷点到掌心的距离须 < 该比例 × 相邻指尖距离，否则视为无真实指缝（圆块谷≈尖）
+ROI_MAX_VALLEY_RATIO = 0.95       # 0.92 → 0.95，放宽指缝深度门
+ROI_FINGER_MIN_TIPS = 3           # 最少指尖数（原硬编码 4，降至 3 允许无名/小指并拢）
+ROI_FINGER_MERGE_SEP = 0.30       # 双峰合并角距 rad（原硬编码 0.22，放宽以容忍光照不均）
+
 # 预处理：有效像素亮度范围（超出视为无效）
 ROI_INTENSITY_LOW = 20
 ROI_INTENSITY_HIGH = 235
@@ -47,11 +61,37 @@ UNLOCK_MS = 3000               # 开锁时长（毫秒）
 SERIAL_PORT = "auto"           # STM32 串口设备，auto=自动探测
 SERIAL_BAUD = 115200           # 波特率（与嵌入式组约定）
 
+# 摄像头
+CAMERA_INDEX = int(os.environ.get("CAMERA_INDEX", "0"))  # 初始摄像头设备号（无持久化时的默认）
+CAMERA_PROBE_COUNT = 6        # 探测的索引范围：0 .. CAMERA_PROBE_COUNT-1
+
 # 服务
 SERVER_HOST = "0.0.0.0"
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "5000"))
 
 _CALIBRATION_PATH = BASE_DIR / "data" / "reports" / "calibration.json"
+_CAMERA_STATE_PATH = BASE_DIR / "data" / "reports" / "camera.json"
+
+
+def get_default_camera_index() -> int:
+    """启动时使用的摄像头索引：优先读上次在界面里选定并持久化的值。"""
+    if _CAMERA_STATE_PATH.exists():
+        import json
+
+        try:
+            data = json.loads(_CAMERA_STATE_PATH.read_text(encoding="utf-8"))
+            return int(data["index"])
+        except (ValueError, KeyError, OSError):
+            pass
+    return CAMERA_INDEX
+
+
+def save_default_camera_index(index: int) -> None:
+    """把当前选定的摄像头索引持久化，供下次启动作为默认。"""
+    import json
+
+    _CAMERA_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _CAMERA_STATE_PATH.write_text(json.dumps({"index": int(index)}), encoding="utf-8")
 
 
 def get_match_threshold() -> float:
