@@ -244,52 +244,46 @@ watchEffect(() => {
       <span class="debug-lbl">显示识别轮廓</span>
     </div>
 
-    <div class="cam" :class="{ active: active || showGuideOk }">
-      <img
-        :key="reloadKey"
-        :src="feedUrl"
-        :alt="stateInfo.label"
-        class="cam-img"
-        @error="onImageError"
-        @load="onImageLoad"
-      />
-      <div class="overlay">
-        <!-- HUD 四角角标 -->
-        <div class="hud-corner hud-corner-tl" />
-        <div class="hud-corner hud-corner-tr" />
-        <div class="hud-corner hud-corner-bl" />
-        <div class="hud-corner hud-corner-br" />
-        <!-- 引导框 -->
-        <div class="guide" :class="{ ok: showGuideOk }" />
-        <!-- HUD 药丸：毛玻璃状态徽标 -->
-        <div class="hud-pill-badge" :style="{ '--pill-accent': stateInfo.color }">
-          <span class="hud-pill-dot" />
-          <span class="hud-pill-text">{{ stateInfo.label }}</span>
+    <div class="cam-bezel" :class="{ active: active || showGuideOk }">
+      <div class="cam-core">
+        <img
+          :key="reloadKey"
+          :src="feedUrl"
+          alt="摄像头实时画面"
+          class="cam-img"
+          @error="onImageError"
+          @load="onImageLoad"
+        />
+        <div class="overlay">
+          <!-- HUD 四角角标 -->
+          <div class="hud-corner hud-corner-tl" />
+          <div class="hud-corner hud-corner-tr" />
+          <div class="hud-corner hud-corner-bl" />
+          <div class="hud-corner hud-corner-br" />
+          <!-- 引导框 -->
+          <div class="guide" :class="{ ok: showGuideOk }" />
+          <!-- HUD 药丸：毛玻璃状态徽标 -->
+          <div class="hud-pill-badge" :style="{ '--pill-accent': stateInfo.color }">
+            <span class="hud-pill-dot" />
+            <span class="hud-pill-text">{{ stateInfo.label }}</span>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- 框下方状态卡 -->
-    <section v-if="showStateCard" class="state-card">
-      <div class="state-eyebrow">
-        <span class="state-dot" :style="{ background: stateInfo.color }" />
-        当前状态
+    <section v-if="showStateCard" class="bezel">
+      <div class="bezel-core">
+        <div>
+          <div class="state-row">
+            <span class="state-dot-lg" :style="{ background: stateInfo.color, boxShadow: `0 0 12px ${stateInfo.color}` }"></span>
+            <span class="state-label-text" :style="{ color: stateInfo.color }">{{ stateInfo.label }}</span>
+          </div>
+          <div class="state-sub">{{ stateInfo.sub }}</div>
+          <div v-if="solidityText" class="state-metric">{{ solidityText }}</div>
+          <n-button v-if="canManualReconnect" type="primary" size="small" class="reconnect-btn" @click="manualReconnect">重新连接</n-button>
+        </div>
       </div>
-      <div class="state-label" :style="{ color: stateInfo.color }">
-        {{ stateInfo.label }}
-      </div>
-      <div class="state-sub">{{ stateInfo.sub }}</div>
-      <div v-if="solidityText" class="state-metric">{{ solidityText }}</div>
-      <!-- 手动重连按钮（仅在重连耗尽后显示） -->
-      <n-button
-        v-if="canManualReconnect"
-        type="primary"
-        size="small"
-        class="reconnect-btn"
-        @click="manualReconnect"
-      >
-        重新连接
-      </n-button>
     </section>
   </div>
 </template>
@@ -300,19 +294,29 @@ watchEffect(() => {
   max-width: 720px;
   margin: 0 auto;
 }
-.cam {
+.cam-bezel {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--color-border);
+  border: 1px solid var(--color-border-hairline);
+  border-radius: var(--radius-xl);
+  padding: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02), 0 8px 24px rgba(0,0,0,0.03);
+  transition: box-shadow 0.2s var(--ease-out-expo);
+}
+.cam-bezel.active {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02), 0 8px 24px rgba(0,0,0,0.03), 0 0 0 3px var(--color-accent-glow);
+}
+.cam-core {
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 3;
-  border-radius: var(--radius-lg);
+  border-radius: calc(var(--radius-xl) - 4px);
   overflow: hidden;
-  background: #0c0c0e;
-  border: 2px solid var(--color-border);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.cam.active {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+  background: #0a0a0c;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.03);
 }
 .cam-img {
   display: block;
@@ -336,8 +340,8 @@ watchEffect(() => {
   aspect-ratio: 1 / 1;
   transform: translate(-50%, -50%);
   border: 1.5px dashed rgba(255, 255, 255, 0.5);
-  border-radius: 12px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  border-radius: var(--radius-sm);
+  transition: border-color var(--duration-med) var(--ease-out-expo), box-shadow var(--duration-med) var(--ease-out-expo);
 }
 .guide.ok {
   border-color: var(--color-state-grasped);
@@ -354,7 +358,7 @@ watchEffect(() => {
   align-items: center;
   gap: 8px;
   padding: 7px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
@@ -369,53 +373,17 @@ watchEffect(() => {
 .hud-pill-badge .hud-pill-dot {
   width: 6px;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--pill-accent, #fff);
   box-shadow: 0 0 8px var(--pill-accent, #fff);
-  animation: hud-pulse 1.6s ease-in-out infinite;
+  animation: hud-pulse 1.6s var(--ease-out-expo) infinite;
 }
 
 /* 状态卡 */
-.state-card {
-  margin-top: 12px;
-  padding: 16px 20px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-.dark .state-card {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-.state-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-faint);
-}
-.state-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  animation: hud-pulse 1.6s ease-in-out infinite;
-}
-.state-label {
-  margin-top: 6px;
-  font-family: var(--font-sans);
-  font-weight: 300;
-  font-size: 22px;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-.state-sub {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--color-muted);
-}
+.state-row { display: flex; align-items: center; gap: 10px; }
+.state-dot-lg { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; animation: hud-pulse 2s var(--ease-out-expo) infinite; }
+.state-label-text { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.state-sub { margin-top: 4px; font-size: 13px; color: var(--color-faint); }
 .state-metric {
   margin-top: 6px;
   font-size: 12px;

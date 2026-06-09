@@ -51,15 +51,16 @@ const hwIndicator = computed(() => {
   <n-config-provider :theme="naiveTheme">
     <n-message-provider>
       <div class="layout">
-        <div class="topbar">
-          <n-page-header title="掌纹识别门禁" />
-          <div class="topbar-right">
-            <!-- 硬件状态心跳点 -->
-            <div v-if="hardware" class="hw-indicator" :class="hwIndicator.cls" :title="hwIndicator.label" aria-live="polite">
-              <span class="hw-dot"></span>
-              <span class="hw-label">{{ hwIndicator.label }}</span>
+        <div class="topbar-wrapper">
+          <div class="topbar">
+            <span class="topbar-brand">掌纹识别门禁</span>
+            <div class="topbar-right">
+              <div v-if="hardware" class="hw-pill" :class="hwIndicator.cls" :title="hwIndicator.label" aria-live="polite">
+                <span class="hw-dot"></span>
+                <span class="hw-label">{{ hwIndicator.label }}</span>
+              </div>
+              <ThemeToggle />
             </div>
-            <ThemeToggle />
           </div>
         </div>
         <n-tabs v-model:value="tab" type="line" animated>
@@ -82,67 +83,108 @@ const hwIndicator = computed(() => {
 .layout {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 80px 24px 48px;
+  padding: 100px 24px 80px;
+  animation: layout-fade-in 0.4s var(--ease-out-expo) both;
+}
+
+/* 浮动玻璃药丸顶栏 */
+.topbar-wrapper {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: calc(100% - 32px);
+  max-width: 1200px;
+  animation: topbar-slide-down 0.6s var(--ease-out-expo) both;
 }
 .topbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
   padding: 12px 24px;
-  background: rgba(var(--color-bg-rgb), 0.8);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(var(--color-bg-rgb), 0.7);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--color-border-hairline);
+  border-radius: var(--radius-pill);
+  box-shadow:
+    0 1px 2px rgba(26,23,20,0.03),
+    0 4px 16px rgba(26,23,20,0.04),
+    0 12px 40px rgba(26,23,20,0.03);
 }
-.topbar :deep(.n-page-header) {
-  flex: 1;
+.dark .topbar {
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.2),
+    0 4px 16px rgba(0,0,0,0.3),
+    0 12px 40px rgba(0,0,0,0.2);
 }
-.topbar :deep(.n-page-header__title) {
-  font-size: 18px !important;
+
+@keyframes topbar-slide-down {
+  from { opacity: 0; transform: translateX(-50%) translateY(-24px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes layout-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.topbar-brand {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
-.hw-indicator {
+
+/* 硬件状态药丸 */
+.hw-pill {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: rgba(var(--color-bg-rgb), 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border);
-  cursor: default;
-}
-.hw-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  animation: hw-heartbeat 1.6s ease-in-out infinite;
-}
-.hw-label {
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-muted);
+  cursor: default;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+.hw-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: hw-pulse 2s var(--ease-out-expo) infinite;
+}
+.hw-label {
   white-space: nowrap;
 }
-/* 状态色 */
+.hw-disabled {
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  color: var(--color-faint);
+}
 .hw-disabled .hw-dot { background: var(--color-faint); animation: none; }
+.hw-connected {
+  background: var(--color-success-soft);
+  border: 1px solid rgba(22,163,74,0.12);
+  color: var(--color-state-grasped);
+}
 .hw-connected .hw-dot { background: var(--color-state-grasped); box-shadow: 0 0 8px var(--color-state-grasped); }
+.hw-error {
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(220,38,38,0.12);
+  color: var(--color-danger);
+}
 .hw-error .hw-dot { background: var(--color-danger); box-shadow: 0 0 8px var(--color-danger); }
-@keyframes hw-heartbeat {
+
+@keyframes hw-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
-  50%      { transform: scale(0.75); opacity: 0.6; }
+  50%      { transform: scale(0.8); opacity: 0.5; }
 }
 </style>

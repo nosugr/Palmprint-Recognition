@@ -69,64 +69,47 @@ async function onEnroll() {
     <!-- 右侧：状态+表单+说明 -->
     <div class="enroll-sidebar">
       <!-- 状态卡片 -->
-      <n-card :bordered="true" class="state-card">
-        <div class="state-header">
-          <span class="state-dot" :style="{ background: cameraState.color }" />
-          <span class="state-eyebrow">当前状态</span>
+      <div class="bezel">
+        <div class="bezel-core">
+          <div>
+            <div class="status-row">
+              <span class="status-dot-lg" />
+              <span class="status-text" :style="{ color: cameraState.color }">{{ cameraState.label }}</span>
+            </div>
+            <div v-if="cameraState.sub" class="status-sub">{{ cameraState.sub }}</div>
+            <div v-if="cameraState.connectionState" class="conn-row">
+              <span class="conn-dot" />
+              <span>
+                {{ cameraState.connectionState === 'connected' ? 'MJPEG 流正常' :
+                   cameraState.connectionState === 'reconnecting' ? `重连中 ${cameraState.reconnectAttempts}/${cameraState.maxReconnectAttempts}` :
+                   cameraState.connectionState === 'disconnected' ? 'MJPEG 流断开' : '连接中' }}
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="state-label" :style="{ color: cameraState.color }">
-          {{ cameraState.label }}
-        </div>
-        <div v-if="cameraState.sub" class="state-sub">{{ cameraState.sub }}</div>
-        <!-- 连接状态详情 -->
-        <div v-if="cameraState.connectionState" class="connection-info">
-          <span class="connection-dot" :class="cameraState.connectionState" />
-          <span class="connection-text">
-            {{ cameraState.connectionState === 'connected' ? 'MJPEG 流正常' :
-               cameraState.connectionState === 'reconnecting' ? `重连中 ${cameraState.reconnectAttempts}/${cameraState.maxReconnectAttempts}` :
-               cameraState.connectionState === 'disconnected' ? 'MJPEG 流断开' : '连接中' }}
-          </span>
-        </div>
-      </n-card>
+      </div>
 
-      <n-card title="注册说明" :bordered="true" class="info-card">
-        <p class="info-text">
-          手掌放入左侧画面的虚线框内，自然张开五指，输入姓名后点击注册。系统将连续采集多张掌纹模板入库。
-        </p>
-      </n-card>
+      <div class="hint">
+        手掌放入左侧画面的虚线框内，自然张开五指，输入姓名后点击注册。系统将连续采集多张掌纹模板入库。
+      </div>
 
-      <n-card title="注册信息" :bordered="true" class="form-card">
-        <div class="form-group">
-          <label for="enroll-name" class="form-label">用户姓名</label>
-          <n-input
-            id="enroll-name"
-            v-model:value="name"
-            placeholder="请输入姓名"
-            :disabled="loading"
-            class="name-input"
-            @keyup.enter="onEnroll"
-          />
-          <n-button
-            type="primary"
-            size="large"
-            :loading="loading"
-            class="enroll-btn"
-            block
-            @click="onEnroll"
-          >
-            <template #icon>
-              <n-icon>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-                  <circle cx="12" cy="13" r="4"/>
-                </svg>
-              </n-icon>
-            </template>
-            {{ loading ? '采集中…' : '开始注册' }}
-          </n-button>
-          <p class="form-hint">需要采集 5 张掌纹图像</p>
+      <!-- 表单卡片 -->
+      <div class="bezel">
+        <div class="bezel-core">
+          <div>
+            <div class="input-bezel">
+              <input id="enroll-name" class="input-core" v-model="name" placeholder="请输入姓名" :disabled="loading" @keyup.enter="onEnroll" />
+            </div>
+            <button class="cta" :disabled="loading" @click="onEnroll">
+              <span>{{ loading ? '采集中…' : '开始注册' }}</span>
+              <span class="cta-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </span>
+            </button>
+            <p class="form-hint">需要采集 5 张掌纹图像</p>
+          </div>
         </div>
-      </n-card>
+      </div>
     </div>
   </div>
 </template>
@@ -137,10 +120,12 @@ async function onEnroll() {
   grid-template-columns: 1fr 380px;
   gap: 24px;
   align-items: start;
+  padding: 0;
 }
 
 .enroll-camera {
   min-width: 0;
+  animation: slide-in-left 0.5s var(--ease-out-expo) 0.1s both;
 }
 
 .enroll-sidebar {
@@ -149,31 +134,74 @@ async function onEnroll() {
   gap: 16px;
 }
 
-.info-card .info-text {
-  font-size: 14px;
-  color: var(--color-muted);
-  line-height: 1.6;
-  margin: 0;
+.enroll-sidebar > :deep(*) {
+  animation:
+    slide-in-right 0.5s var(--ease-out-expo) both,
+    stagger-up 0.4s var(--ease-out-expo) both;
 }
 
-.form-group {
+.enroll-sidebar > :deep(*:nth-child(1)) { animation-delay: 0.15s, 0.2s; }
+.enroll-sidebar > :deep(*:nth-child(2)) { animation-delay: 0.22s, 0.28s; }
+.enroll-sidebar > :deep(*:nth-child(3)) { animation-delay: 0.29s, 0.36s; }
+
+/* 状态卡片 */
+.status-row {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
 }
 
-.form-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text);
+.status-dot-lg {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-state-grasped);
+  box-shadow: 0 0 12px var(--color-state-grasped);
+  flex-shrink: 0;
+  animation: state-pulse 2s var(--ease-out-expo) infinite;
 }
 
-.name-input {
-  width: 100%;
+.status-text {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-state-grasped);
 }
 
-.enroll-btn {
-  width: 100%;
+.status-sub {
+  font-size: 13px;
+  color: var(--color-faint);
+  margin-top: 4px;
+}
+
+.conn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-state-grasped);
+  box-shadow: 0 0 6px var(--color-state-grasped);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--color-muted);
+  line-height: 1.7;
+  padding: 14px 18px;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-hairline);
 }
 
 .form-hint {
@@ -181,93 +209,6 @@ async function onEnroll() {
   color: var(--color-faint);
   text-align: center;
   margin: 0;
-}
-
-/* 状态卡片样式 */
-.state-card {
-  background: var(--color-surface);
-}
-
-.state-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.state-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  animation: state-pulse 1.6s ease-in-out infinite;
-}
-
-.state-eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--color-faint);
-}
-
-.state-label {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.state-sub {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--color-muted);
-}
-
-@keyframes state-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.85); }
-}
-
-/* 连接状态信息 */
-.connection-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
-}
-
-.connection-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.connection-dot.connected {
-  background: var(--color-state-grasped);
-  box-shadow: 0 0 6px var(--color-state-grasped);
-}
-
-.connection-dot.connecting {
-  background: var(--color-muted);
-  animation: state-pulse 1.6s ease-in-out infinite;
-}
-
-.connection-dot.disconnected {
-  background: var(--color-danger);
-}
-
-.connection-dot.reconnecting {
-  background: var(--color-state-search);
-  animation: state-pulse 1.6s ease-in-out infinite;
-}
-
-.connection-text {
-  font-size: 12px;
-  color: var(--color-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 960px) {

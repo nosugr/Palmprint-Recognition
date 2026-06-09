@@ -29,6 +29,17 @@ class WebcamCamera(Camera):
         self._index = device
         self._cap = cv2.VideoCapture(device)
         self._lock = threading.Lock()
+        # isOpened() 在 Windows 上常假阳性：设备号被占用但仍报 opened，read 却永远失败。
+        # 开后真读一帧（带重试，兼容 USB 相机的几百毫秒预热）才算可用。
+        self._usable = self._cap.isOpened() and self._probe()
+
+    def _probe(self, attempts: int = 8, delay: float = 0.05) -> bool:
+        for _ in range(attempts):
+            ok, frame = self._cap.read()
+            if ok and frame is not None and frame.size > 0:
+                return True
+            time.sleep(delay)
+        return False
 
     @property
     def index(self) -> int:
@@ -42,7 +53,7 @@ class WebcamCamera(Camera):
             return frame if ok else None
 
     def is_open(self) -> bool:
-        return self._cap.isOpened()
+        return self._cap.isOpened() and self._usable
 
     def release(self) -> None:
         with self._lock:

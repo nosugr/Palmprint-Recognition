@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { h, onMounted, ref } from 'vue'
-import { NButton, NTag, useMessage } from 'naive-ui'
+import { NTag, useMessage } from 'naive-ui'
 import { api, type ApiUser, type LogRow } from '../api'
 
 const message = useMessage()
@@ -39,13 +39,13 @@ const userColumns = [
     width: 100,
     render(row: ApiUser) {
       return h(
-        NButton,
+        'button',
         {
-          size: 'small', type: 'error', tertiary: true,
+          class: 'btn-danger-ghost',
           'aria-label': `删除用户 ${row.name}`,
           onClick: () => onDelete(row.id, row.name),
         },
-        { default: () => '删除' },
+        '删除',
       )
     },
   },
@@ -121,7 +121,10 @@ onMounted(refresh)
     </div>
 
     <section>
-      <h3 class="section-label">注册用户</h3>
+      <div class="section-divider">
+        <span class="section-divider-text">注册用户</span>
+        <span class="section-divider-line"></span>
+      </div>
       <n-data-table
         :columns="userColumns"
         :data="users"
@@ -132,7 +135,10 @@ onMounted(refresh)
     </section>
 
     <section>
-      <h3 class="section-label">识别记录</h3>
+      <div class="section-divider">
+        <span class="section-divider-text">识别记录</span>
+        <span class="section-divider-line"></span>
+      </div>
       <n-data-table
         :columns="logColumns"
         :data="logs"
@@ -149,22 +155,15 @@ onMounted(refresh)
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 28px;
 }
 .logs-title {
   margin: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 18px;
   letter-spacing: -0.02em;
   line-height: 1.3;
   color: var(--color-text);
-}
-.section-label {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-faint);
 }
 </style>

@@ -11,7 +11,7 @@ import config
 from algorithm.encode import encode
 from algorithm.matcher import match_confidence, match_distance
 from algorithm.preprocess import finalize_patch, to_gray
-from algorithm.roi import debug_geometry, extract_palm_roi_ex
+from algorithm.roi import extract_palm_roi_ex, get_detect_stats, reset_detect_stats
 from algorithm.template import mask_array
 from hardware.camera import SwitchableCamera
 from hardware.probe import probe_cameras
@@ -59,7 +59,7 @@ def _capture_encode():
         res = extract_palm_roi_ex(to_gray(frame), bgr=frame)
         if res.ok:
             success_count += 1
-            mask_ratio = float(mask_array(res.mask).mean()) if res.mask is not None else 0.0
+            mask_ratio = float(res.mask.mean()) if res.mask is not None else 0.0
             score = mask_ratio * res.quality
             if best is None or score > best[0]:
                 best = (score, res.roi, res.mask, frame)
@@ -195,16 +195,25 @@ def preview_status():
     frame = camera.read()
     if frame is None:
         return _ok({"ready": False, "status": "no_camera", "reason": "摄像头未就绪", "quality": 0.0, "solidity": None})
-    geo = debug_geometry(to_gray(frame), bgr=frame)
+    res = extract_palm_roi_ex(to_gray(frame), bgr=frame)
     return _ok(
         {
-            "ready": geo["status"] == "ok",
-            "status": geo["status"],
-            "reason": geo["reason"],
-            "quality": geo["quality"],
-            "solidity": geo["solidity"],
+            "ready": res.ok,
+            "status": res.status,
+            "reason": res.reason,
+            "quality": res.quality,
+            "solidity": None,
         }
     )
+
+
+@api.get("/detect_stats")
+def detect_stats():
+    """ROI 检测各阶段命中/拒识计数直方图（诊断用）。?reset=1 时返回当前值后清零。"""
+    stats = get_detect_stats()
+    if request.args.get("reset") in ("1", "true", "yes"):
+        reset_detect_stats()
+    return _ok(stats)
 
 
 @api.get("/logs")

@@ -13,7 +13,6 @@ declare module 'vue' {
   export interface GlobalComponents {
     CameraPicker: typeof import('./src/components/CameraPicker.vue')['default']
     CameraView: typeof import('./src/components/CameraView.vue')['default']
-    HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     NButton: typeof import('naive-ui')['NButton']
     NCard: typeof import('naive-ui')['NCard']
     NConfigProvider: typeof import('naive-ui')['NConfigProvider']

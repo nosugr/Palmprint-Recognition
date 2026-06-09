@@ -25,11 +25,11 @@ def create_app(
     app = Flask(__name__)
 
     repo = Repository()
-    fallback = camera_fallback or (config.BASE_DIR / "data" / "demo" / "person_000")
+    fallback = camera_fallback or (config.BASE_DIR / "scripts" / "data" / "demo" / "person_000")
     cam_index = config.get_default_camera_index()
     try:
         camera = create_camera(prefer_webcam=True, fallback_dir=fallback, index=cam_index)
-    except RuntimeError:
+    except (RuntimeError, ValueError):
         camera = create_camera(prefer_webcam=False, fallback_dir=fallback, index=cam_index)
 
     bridge = create_bridge(use_serial=use_serial)

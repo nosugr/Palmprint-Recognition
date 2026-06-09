@@ -47,7 +47,8 @@ const { theme, toggle } = useTheme()
   background: transparent;
   color: var(--color-muted);
   cursor: pointer;
-  transition: color 0.2s, background-color 0.2s;
+  transition: color var(--duration-fast) var(--ease-out-expo),
+              background-color var(--duration-fast) var(--ease-out-expo);
 }
 .theme-toggle:hover {
   color: var(--color-text);
