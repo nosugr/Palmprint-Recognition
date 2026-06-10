@@ -2,6 +2,7 @@ export interface ApiUser {
   id: number
   name: string
   template_count: number
+  hands: { L?: number; R?: number }
   created_at: string
 }
 
@@ -9,6 +10,7 @@ export interface EnrollResult {
   user_id: number
   captured: number
   quality: number
+  hand_side: string
 }
 
 export interface VerifyResult {
@@ -17,6 +19,7 @@ export interface VerifyResult {
   distance: number
   threshold: number
   confidence: number
+  hand_side: string
 }
 
 export interface PreviewStatus {

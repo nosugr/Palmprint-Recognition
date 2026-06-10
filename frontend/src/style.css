@@ -56,29 +56,29 @@
 }
 
 .dark {
-  --color-bg: #08090b;
-  --color-bg-rgb: 8, 9, 11;
-  --color-surface: #121318;
-  --color-surface-raised: #1a1b22;
-  --color-surface-sunken: #0c0d10;
-  --color-text: #e8eaed;
-  --color-muted: #a0a4b0;
-  --color-faint: #6b7080;
+  --color-bg: #1f1d1a;
+  --color-bg-rgb: 31, 29, 26;
+  --color-surface: #2a2622;
+  --color-surface-raised: #322e29;
+  --color-surface-sunken: #181614;
+  --color-text: #ede8db;
+  --color-muted: #918a7e;
+  --color-faint: #6b655c;
   --color-border: rgba(255,255,255,0.08);
   --color-border-hairline: rgba(255,255,255,0.04);
   --color-border-strong: rgba(255,255,255,0.15);
-  --color-accent: #a78bfa;
-  --color-accent-hover: #c4b5fd;
-  --color-accent-soft: rgba(167,139,250,0.1);
-  --color-accent-glow: rgba(167,139,250,0.18);
+  --color-accent: #d68f70;
+  --color-accent-hover: #e0a081;
+  --color-accent-soft: rgba(214,143,112,0.12);
+  --color-accent-glow: rgba(214,143,112,0.18);
 
-  --color-state-search: #fbbf24;
-  --color-state-locked: #60a5fa;
+  --color-state-search: #d4a456;
+  --color-state-locked: #82b1d6;
   --color-state-aligning: #8b8f96;
-  --color-state-grasped: #4ade80;
-  --color-danger: #f87171;
-  --color-danger-soft: rgba(248,113,113,0.08);
-  --color-success-soft: rgba(74,222,128,0.08);
+  --color-state-grasped: #8db58d;
+  --color-danger: #c66e60;
+  --color-danger-soft: rgba(198,110,96,0.1);
+  --color-success-soft: rgba(141,181,141,0.1);
 }
 
 body {
@@ -90,8 +90,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  transition: background-color var(--duration-med) var(--ease-out-expo),
-              color var(--duration-med) var(--ease-out-expo);
+  transition: background-color 220ms ease, color 220ms ease;
   overflow-x: hidden;
 }
 
@@ -151,7 +150,7 @@ body {
 
 ::view-transition-new(root) {
   z-index: 2;
-  animation: theme-reveal 520ms var(--ease-out-expo);
+  animation: theme-reveal 520ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes theme-reveal {
@@ -180,6 +179,7 @@ body {
   box-shadow:
     0 1px 2px rgba(26,23,20,0.04),
     0 8px 24px rgba(26,23,20,0.1);
+  transform: translateY(-3px);
 }
 .dark .bezel {
   box-shadow:
@@ -190,6 +190,7 @@ body {
   box-shadow:
     0 1px 2px rgba(0,0,0,0.2),
     0 8px 24px rgba(0,0,0,0.4);
+  transform: translateY(-3px);
 }
 .bezel-core {
   background: var(--color-surface);
@@ -200,7 +201,7 @@ body {
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.05);
 }
 .bezel-core > * {
-  padding: 20px 24px;
+  padding: 24px 28px;
 }
 .bezel-core > *:not(:last-child) {
   border-bottom: 1px solid var(--color-border);
@@ -223,28 +224,29 @@ body {
   border: 1px solid var(--color-border-hairline);
   border-radius: var(--radius-md);
   padding: 3px;
+  margin-bottom: 14px;
 }
 .input-core {
   width: 100%;
-  padding: 10px 14px;
-  border: none;
+  padding: 11px 16px;
+  border: 1.5px solid transparent;
   border-radius: calc(var(--radius-md) - 2px);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--color-text);
   background: var(--color-surface);
   outline: none;
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.6);
-  transition: box-shadow var(--duration-fast) var(--ease-out-expo);
+  transition: border-color var(--duration-fast) var(--ease-out-expo),
+              box-shadow var(--duration-fast) var(--ease-out-expo);
 }
 .dark .input-core {
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.03);
 }
 .input-core:focus {
-  box-shadow:
-    inset 0 1px 1px rgba(255,255,255,0.6),
-    0 0 0 4px var(--color-accent-glow);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.6);
 }
 .input-core::placeholder {
   color: var(--color-faint);
@@ -260,11 +262,11 @@ body {
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 14px 28px;
+  padding: 12px 28px;
   border: none;
   border-radius: var(--radius-pill);
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--color-text);
+  color: var(--color-bg);
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
@@ -273,12 +275,14 @@ body {
   transition: all var(--duration-fast) var(--ease-out-expo);
 }
 .cta:hover {
-  background: var(--color-accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(124,58,237,0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(26,23,20,0.2);
+}
+.dark .cta:hover {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
 }
 .cta:active {
-  transform: scale(0.98) translateY(0);
+  transform: scale(0.97) translateY(0);
   box-shadow: none;
 }
 .cta-icon {
@@ -341,21 +345,6 @@ body {
    Naive UI 组件覆盖 — Taste-Soft 风格
    ================================================================== */
 
-.n-tabs .n-tabs-tab {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  transition: color var(--duration-fast) var(--ease-out-expo);
-}
-.n-tabs .n-tabs-tab--active {
-  color: var(--color-accent) !important;
-}
-.n-tabs .n-tabs-bar {
-  background-color: var(--color-accent) !important;
-  border-radius: var(--radius-pill) !important;
-  height: 2.5px !important;
-}
-
 .n-button--primary-type {
   border-radius: var(--radius-pill) !important;
   transition: transform 0.1s var(--ease-spring),
@@ -411,13 +400,14 @@ body {
   box-shadow:
     0 1px 2px rgba(26,23,20,0.04),
     0 4px 12px rgba(26,23,20,0.06);
-  transition: all 0.3s var(--ease-out-expo);
+  transition: transform 0.25s var(--ease-out-expo),
+              box-shadow 0.25s var(--ease-out-expo);
 }
 .n-card:hover {
   box-shadow:
     0 1px 2px rgba(26,23,20,0.04),
     0 8px 24px rgba(26,23,20,0.1);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 .dark .n-card {
   box-shadow:
@@ -428,6 +418,7 @@ body {
   box-shadow:
     0 1px 2px rgba(0,0,0,0.2),
     0 8px 24px rgba(0,0,0,0.4);
+  transform: translateY(-3px);
 }
 
 .n-tag {

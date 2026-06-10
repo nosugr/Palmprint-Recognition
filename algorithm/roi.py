@@ -34,6 +34,7 @@ class RoiResult:
 
     status: ok / no_hand / out_of_bounds
     quality: 仅 status==ok 时有意义，越大越清晰（拉普拉斯方差，纹路对比度代理）。
+    hand_side: "L"（左手）/ "R"（右手）/ ""（未检测）。
     """
 
     status: str
@@ -42,6 +43,7 @@ class RoiResult:
     roi: np.ndarray | None = None
     mask: np.ndarray | None = None
     quality: float = 0.0
+    hand_side: str = ""
 
     @property
     def ok(self) -> bool:
@@ -86,9 +88,15 @@ def reset_detect_stats() -> None:
         _STATS.clear()
 
 
-def _roi_quality(patch: np.ndarray) -> float:
-    """纹路清晰度评分：拉普拉斯方差（对焦/对比度代理），越大越好。"""
-    return float(cv2.Laplacian(patch, cv2.CV_64F).var())
+def _roi_quality(patch: np.ndarray) -> tuple[float, float]:
+    """返回归一化后的 (清晰度, 对比度)，均在 0~1 范围。
+
+    清晰度 = 拉普拉斯方差 / 参考值（掌纹典型清晰图约 500~1000）。
+    对比度 = 像素标准差 / 参考值（掌纹灰度图约 50~80）。
+    """
+    clarity = min(float(cv2.Laplacian(patch, cv2.CV_64F).var()) / 800.0, 1.0)
+    contrast = min(float(np.std(patch)) / 70.0, 1.0)
+    return clarity, contrast
 
 
 def _warp_roi_from_keypoints(
@@ -164,14 +172,17 @@ def extract_palm_roi_ex(gray: np.ndarray, bgr: np.ndarray | None = None) -> RoiR
     kp = hand_keypoints(bgr_crop)
     if kp is None:
         return _record(RoiResult("no_hand", _REASONS["no_hand"], detail="mp_no_hand"))
-    x1, x2, center, _pts = kp
+    x1, x2, center, _pts, hand_side = kp
 
     warped = _warp_roi_from_keypoints(gray, x1, x2, center)
     if warped is None:
         return _record(RoiResult("out_of_bounds", _REASONS["out_of_bounds"], detail="warp_oob"))
 
     patch, patch_mask = warped
-    return _record(RoiResult("ok", _REASONS["ok"], roi=patch, mask=patch_mask, quality=_roi_quality(patch), detail="ok"))
+    clarity, contrast = _roi_quality(patch)
+    coverage = float((patch_mask > 0).mean()) if patch_mask is not None else 0.0
+    quality = 0.5 * coverage + 0.3 * clarity + 0.2 * contrast
+    return _record(RoiResult("ok", _REASONS["ok"], roi=patch, mask=patch_mask, quality=quality, detail="ok", hand_side=hand_side))
 
 
 def extract_palm_roi(gray: np.ndarray, bgr: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray] | None:
@@ -199,6 +210,7 @@ def debug_geometry(gray: np.ndarray, bgr: np.ndarray | None = None) -> dict:
         "x1": None,
         "x2": None,
         "guide_box": [gx0, gy0, gx1, gy1],
+        "hand_side": "",
     }
     if bgr_crop is None:
         return out
@@ -206,10 +218,11 @@ def debug_geometry(gray: np.ndarray, bgr: np.ndarray | None = None) -> dict:
     kp = hand_keypoints(bgr_crop)
     if kp is None:
         return out
-    x1, x2, center, pts = kp
+    x1, x2, center, pts, hand_side = kp
     out["landmarks"] = [(float(p[0] + gx0), float(p[1] + gy0)) for p in pts]
     out["x1"] = (float(x1[0] + gx0), float(x1[1] + gy0))
     out["x2"] = (float(x2[0] + gx0), float(x2[1] + gy0))
+    out["hand_side"] = hand_side
 
     gray_crop = gray[gy0:gy1, gx0:gx1]
     warped = _warp_roi_from_keypoints(gray_crop, x1, x2, center)
@@ -219,7 +232,9 @@ def debug_geometry(gray: np.ndarray, bgr: np.ndarray | None = None) -> dict:
     else:
         out["status"] = "ok"
         out["reason"] = _REASONS["ok"]
-        out["quality"] = round(_roi_quality(warped[0]), 2)
+        clarity, contrast = _roi_quality(warped[0])
+        coverage = float((warped[1] > 0).mean()) if warped[1] is not None else 0.0
+        out["quality"] = round(0.5 * coverage + 0.3 * clarity + 0.2 * contrast, 2)
     return out
 
 

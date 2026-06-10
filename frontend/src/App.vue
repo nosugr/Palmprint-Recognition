@@ -9,6 +9,11 @@ import { useTheme } from './composables/useTheme'
 import { api, type HardwareStatus } from './api'
 
 const tab = ref('enroll')
+const tabs = [
+  { key: 'enroll', label: '注册' },
+  { key: 'verify', label: '验证' },
+  { key: 'logs', label: '日志' },
+]
 const { theme } = useTheme()
 const naiveTheme = computed(() => (theme.value === 'dark' ? darkTheme : null))
 
@@ -63,17 +68,22 @@ const hwIndicator = computed(() => {
             </div>
           </div>
         </div>
-        <n-tabs v-model:value="tab" type="line" animated>
-          <n-tab-pane name="enroll" tab="注册">
-            <Enroll />
-          </n-tab-pane>
-          <n-tab-pane name="verify" tab="验证">
-            <Verify />
-          </n-tab-pane>
-          <n-tab-pane name="logs" tab="日志">
-            <Logs />
-          </n-tab-pane>
-        </n-tabs>
+        <!-- 填充药丸标签 -->
+        <div class="pill-tabs">
+          <button
+            v-for="t in tabs"
+            :key="t.key"
+            class="pill-tab"
+            :class="{ active: tab === t.key }"
+            @click="tab = t.key"
+          >{{ t.label }}</button>
+        </div>
+
+        <div class="tab-content">
+          <Enroll v-if="tab === 'enroll'" />
+          <Verify v-else-if="tab === 'verify'" />
+          <Logs v-else />
+        </div>
       </div>
     </n-message-provider>
   </n-config-provider>
@@ -186,5 +196,50 @@ const hwIndicator = computed(() => {
 @keyframes hw-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50%      { transform: scale(0.8); opacity: 0.5; }
+}
+
+/* 填充药丸标签 */
+.pill-tabs {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+  margin-bottom: 28px;
+}
+.pill-tab {
+  padding: 7px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: var(--color-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+.pill-tab:hover:not(.active) {
+  color: var(--color-text);
+  background: rgba(26,23,20,0.04);
+}
+.dark .pill-tab:hover:not(.active) {
+  background: rgba(255,255,255,0.06);
+}
+.pill-tab.active {
+  color: #fff;
+  background: var(--color-text);
+  box-shadow: 0 1px 3px rgba(26,23,20,0.15);
+}
+.dark .pill-tab.active {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+
+.tab-content {
+  animation: tab-fade 0.3s var(--ease-out-expo) both;
+}
+@keyframes tab-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 </style>

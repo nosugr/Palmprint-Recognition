@@ -52,11 +52,13 @@ def _get_detector() -> vision.HandLandmarker:
 
 
 def hand_keypoints(bgr: np.ndarray):
-    """检测单手，返回 (x1, x2, center, landmarks_px) 或 None（未检到手）。
+    """检测单手，返回 (x1, x2, center, landmarks_px, hand_side) 或 None（未检到手）。
 
     x1 = 食指-中指根部中点，x2 = 无名-小指根部中点（Zhang ROI 的两指缝点）。
     center = 手腕点（仅用于定 ROI 的 Y 轴朝向）。坐标均为输入图像像素坐标。
     landmarks_px: (21, 2) ndarray，全部关键点像素坐标，供调试叠加。
+    hand_side: "L"（左手）/ "R"（右手）。MediaPipe 返回的是镜像前的手别，
+    摄像头画面左右翻转后需反转：画面中的 "Left" 实为用户右手。
     """
     if bgr is None or bgr.size == 0:
         return None
@@ -72,4 +74,7 @@ def hand_keypoints(bgr: np.ndarray):
     x1 = (pts[_INDEX_MCP] + pts[_MIDDLE_MCP]) / 2.0
     x2 = (pts[_RING_MCP] + pts[_PINKY_MCP]) / 2.0
     center = (float(pts[_WRIST][0]), float(pts[_WRIST][1]))
-    return x1, x2, center, pts
+    # MediaPipe handedness: 摄像头已做镜像翻转，画面 "Left" 即用户左手
+    mp_label = result.handedness[0][0].category_name  # "Left" / "Right"
+    hand_side = "L" if mp_label == "Left" else "R"
+    return x1, x2, center, pts, hand_side

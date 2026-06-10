@@ -25,6 +25,17 @@ function formatDate(raw: string): string {
 const userColumns = [
   { title: 'ID', key: 'id', width: 60 },
   { title: '姓名', key: 'name' },
+  {
+    title: '手',
+    key: 'hands',
+    width: 100,
+    render(row: ApiUser) {
+      const parts: string[] = []
+      if (row.hands?.L) parts.push(`左${row.hands.L}`)
+      if (row.hands?.R) parts.push(`右${row.hands.R}`)
+      return parts.join(' / ') || '-'
+    },
+  },
   { title: '模板数', key: 'template_count', width: 90 },
   {
     title: '注册时间',

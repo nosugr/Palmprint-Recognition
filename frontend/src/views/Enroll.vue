@@ -44,7 +44,9 @@ async function onEnroll() {
   loading.value = true
   try {
     const res = await api.enroll(name.value.trim())
-    message.success(`注册成功：${res.captured} 张，质量 ${(res.quality * 100).toFixed(1)}%`)
+    const handLabel = res.hand_side === 'L' ? '左手' : res.hand_side === 'R' ? '右手' : ''
+    const handInfo = handLabel ? `，检测到${handLabel}` : ''
+    message.success(`注册成功：${res.captured} 张，质量 ${(res.quality * 100).toFixed(1)}%${handInfo}`)
     name.value = ''
   } catch (e) {
     message.error(e instanceof Error ? e.message : '注册失败')
@@ -131,7 +133,7 @@ async function onEnroll() {
 .enroll-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .enroll-sidebar > :deep(*) {
@@ -208,7 +210,7 @@ async function onEnroll() {
   font-size: 12px;
   color: var(--color-faint);
   text-align: center;
-  margin: 0;
+  margin: 12px 0 0;
 }
 
 @media (max-width: 960px) {

@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS templates (
     width           INTEGER NOT NULL,
     bits_per_pixel  INTEGER NOT NULL,
     version         TEXT NOT NULL,
+    hand_side       TEXT DEFAULT '',
+    quality         REAL DEFAULT 0,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -48,4 +50,13 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
+    # 旧数据库迁移：添加新列（已存在则忽略）
+    for col_def in [
+        "ALTER TABLE templates ADD COLUMN hand_side TEXT DEFAULT ''",
+        "ALTER TABLE templates ADD COLUMN quality REAL DEFAULT 0",
+    ]:
+        try:
+            conn.execute(col_def)
+        except sqlite3.OperationalError:
+            pass  # 列已存在
     conn.commit()
