@@ -50,9 +50,9 @@ async function onVerify() {
   try {
     result.value = await api.verify()
     if (result.value.matched) {
-      message.success(`识别成功：${result.value.user?.name}（置信度 ${confidencePct.value}%）`)
+      message.success(`识别成功：${result.value.user?.name}（置信度 ${confidencePct.value}%）— 门锁已开`)
     } else {
-      message.error(`未匹配（置信度 ${confidencePct.value}%）`)
+      message.error(`未匹配（置信度 ${confidencePct.value}%）— 门锁未开`)
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : '验证失败')
@@ -126,6 +126,11 @@ async function onVerify() {
                 <n-tag :type="result.matched ? 'success' : 'error'" size="large" round>
                   {{ result.matched ? `识别为 ${result.user?.name}` : '未识别 / 拒绝' }}
                 </n-tag>
+
+                <div class="lock-status" :class="result.matched ? 'lock-open' : 'lock-locked'">
+                  <span class="lock-icon">{{ result.matched ? '🔓' : '🔒' }}</span>
+                  <span>{{ result.matched ? '门锁已开' : '门锁未开' }}</span>
+                </div>
 
                 <n-descriptions :column="3" label-placement="top" size="small" class="detail">
                   <n-descriptions-item label="匹配距离">
@@ -231,6 +236,50 @@ async function onVerify() {
   0%   { opacity: 0; transform: scale(0.8); }
   60%  { transform: scale(1.04); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+/* 门锁状态 */
+.lock-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.lock-open {
+  color: var(--color-state-grasped);
+}
+.lock-locked {
+  color: var(--color-danger);
+}
+.lock-icon {
+  font-size: 24px;
+  display: inline-block;
+}
+.lock-open .lock-icon {
+  animation: lock-bounce 0.6s 0.3s var(--ease-spring) both;
+}
+.lock-locked .lock-icon {
+  animation: lock-shake 0.5s 0.3s ease-in-out both;
+}
+
+@keyframes lock-bounce {
+  0%   { transform: scale(1) rotate(0deg); }
+  30%  { transform: scale(1.3) rotate(-10deg); }
+  50%  { transform: scale(0.9) rotate(5deg); }
+  70%  { transform: scale(1.1) rotate(-3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes lock-shake {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-6px); }
+  30%      { transform: translateX(5px); }
+  45%      { transform: translateX(-4px); }
+  60%      { transform: translateX(3px); }
+  75%      { transform: translateX(-2px); }
+  90%      { transform: translateX(1px); }
 }
 
 /* 状态卡片样式 */
