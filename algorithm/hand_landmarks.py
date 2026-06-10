@@ -44,8 +44,10 @@ def _get_detector() -> vision.HandLandmarker:
             base_options=mp_python.BaseOptions(model_asset_buffer=model_data),
             running_mode=vision.RunningMode.IMAGE,
             num_hands=1,
-            min_hand_detection_confidence=0.5,
-            min_hand_presence_confidence=0.5,
+            # 0.7：宁可个别帧漏检（多帧采集可兜底），也不要低置信关键点
+            # 带来的 ROI 配准抖动——配准抖动直接拉大同掌匹配距离。
+            min_hand_detection_confidence=0.7,
+            min_hand_presence_confidence=0.7,
         )
         _detector = vision.HandLandmarker.create_from_options(opts)
     return _detector

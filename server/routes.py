@@ -35,21 +35,19 @@ def _services():
     )
 
 
-def _capture_encode():
-    """抓多帧 → 各自做 ROI 提取 → 选综合质量最好的一帧编码。
+def _capture_encode_multi() -> list[tuple[Any, Any, float, str]]:
+    """抓多帧 → 每个 ROI 提取成功的帧各自编码。
 
-    单帧自动 ROI 约 30% 会失败；多帧选优把成功率拉高，并选出配准/清晰度最好的
-    那帧，提升匹配一致性。全部失败时抛出带具体原因的 RuntimeError 供上层拒识。
-
-    选优评分 = 覆盖度 × 清晰度 × 对比度，综合评估 ROI 质量。
+    返回 [(frame, template, quality, hand_side), ...]（至少 1 个）。
+    单帧自动 ROI 有一定失败率；多帧把成功率拉高，验证时还可对多个模板分别
+    比对取最小距离（多帧融合），抵消单帧关键点抖动带来的配准误差。
+    全部失败时抛出带具体原因的 RuntimeError 供上层拒识。
     """
-    repo, camera, _ = _services()
-    del repo
+    _, camera, _ = _services()
 
-    best = None  # (composite_score, patch, patch_mask, frame, hand_side)
+    candidates = []  # (patch, patch_mask, frame, hand_side)
     reasons: list[str] = []
     got_frame = False
-    success_count = 0
     for i in range(config.CAPTURE_FRAMES):
         frame = camera.read()
         if frame is None:
@@ -57,11 +55,7 @@ def _capture_encode():
         got_frame = True
         res = extract_palm_roi_ex(to_gray(frame), bgr=frame)
         if res.ok:
-            success_count += 1
-            mask_ratio = float((res.mask > 0).mean()) if res.mask is not None else 0.0
-            score = mask_ratio * res.quality
-            if best is None or score > best[0]:
-                best = (score, res.roi, res.mask, frame, res.hand_side)
+            candidates.append((res.roi, res.mask, frame, res.hand_side))
         else:
             reasons.append(res.reason)
         if i < config.CAPTURE_FRAMES - 1:
@@ -69,37 +63,53 @@ def _capture_encode():
 
     if not got_frame:
         raise RuntimeError("camera read failed")
-    if best is None:
+    if not candidates:
         reason = max(set(reasons), key=reasons.count) if reasons else "未检测到清晰掌纹，请重新放手"
         raise RuntimeError(reason)
 
-    _, patch, patch_mask, frame, hand_side = best
-    roi, valid_mask = finalize_patch(patch, patch_mask)
-    template = encode(roi, valid_mask)
-    coverage = float(valid_mask.mean())
-    clarity, contrast = _roi_quality(roi)
-    quality = 0.5 * coverage + 0.3 * clarity + 0.2 * contrast
-    return frame, template, quality, hand_side
+    out: list[tuple[Any, Any, float, str]] = []
+    for patch, patch_mask, frame, hand_side in candidates:
+        roi, valid_mask = finalize_patch(patch, patch_mask)
+        template = encode(roi, valid_mask)
+        coverage = float(valid_mask.mean())
+        clarity, contrast = _roi_quality(roi)
+        quality = 0.5 * coverage + 0.3 * clarity + 0.2 * contrast
+        out.append((frame, template, quality, hand_side))
+    return out
 
 
-def _match_against_gallery(template) -> tuple[bool, dict | None, float, float, str]:
+def _capture_encode():
+    """单模板版本：多帧候选中取质量最高的一个（注册场景用）。"""
+    return max(_capture_encode_multi(), key=lambda c: c[2])
+
+
+def _match_against_gallery(probes: list[tuple[Any, str]]) -> tuple[bool, dict | None, float, float, str]:
+    """probes: [(template, hand_side), ...]，逐个与库比对，取全局最小距离。
+
+    手别过滤：探针手别已知且库中存在同手别模板时只比同手别，减少误匹配；
+    库中无同手别模板时回退全库，避免手别偶发误判导致擦肩拒识。
+    """
     repo, _, _ = _services()
     threshold = config.get_match_threshold()
     gallery = repo.load_gallery()
-    if not gallery:
+    if not gallery or not probes:
         return False, None, 1.0, threshold, ""
 
     best_uid: int | None = None
     best_name: str | None = None
     best_dist = 1.0
     best_hand = ""
-    for uid, name, tmpl, hand_side in gallery:
-        d = match_distance(template, tmpl)
-        if d < best_dist:
-            best_dist = d
-            best_uid = uid
-            best_name = name
-            best_hand = hand_side
+    for probe, probe_hand in probes:
+        candidates = [g for g in gallery if g[3] == probe_hand] if probe_hand else []
+        if not candidates:
+            candidates = gallery
+        for uid, name, tmpl, hand_side in candidates:
+            d = match_distance(probe, tmpl)
+            if d < best_dist:
+                best_dist = d
+                best_uid = uid
+                best_name = name
+                best_hand = hand_side
 
     matched = best_dist < threshold
     user = {"id": best_uid, "name": best_name} if matched and best_uid is not None else None
@@ -144,22 +154,17 @@ def enroll():
         if hand_side != detected_hand:
             continue
 
-        # 质量覆盖：同用户同手已有模板时，新质量更优则删旧存新，否则跳过
-        if existing:
-            old_tmpls = repo.get_templates_by_user_hand(user_id, hand_side)
-            if old_tmpls:
-                old_best = max(t["quality"] for t in old_tmpls)
-                if quality > old_best:
-                    for old in old_tmpls:
-                        repo.delete_template(old["id"])
-                else:
-                    # 新模板质量不优于旧的，跳过存储
-                    captured += 1
-                    quality_sum += quality
-                    time.sleep(0.25)
-                    continue
-
         repo.add_template(user_id, template, hand_side, quality)
+        # 新旧模板合并后按质量只保留前 N 张：既避免重注册时收缩成单张
+        # （模板越多同掌最小距离越小），也防止反复注册导致模板无限增长
+        tmpls = [
+            t for t in repo.get_templates_by_user_hand(user_id, hand_side)
+            if t["version"] == config.TEMPLATE_VERSION
+        ]
+        if len(tmpls) > config.MAX_TEMPLATES_PER_HAND:
+            tmpls.sort(key=lambda t: t["quality"], reverse=True)
+            for old in tmpls[config.MAX_TEMPLATES_PER_HAND :]:
+                repo.delete_template(old["id"])
         captured += 1
         quality_sum += quality
         time.sleep(0.25)
@@ -197,11 +202,15 @@ def delete_user(user_id: int):
 def verify():
     repo, _, bridge = _services()
     try:
-        _, template, _, _ = _capture_encode()
+        candidates = _capture_encode_multi()
     except RuntimeError as exc:
         return _err(str(exc))
 
-    matched, user, distance, threshold, hand_side = _match_against_gallery(template)
+    # 质量最高的前 N 帧参与比对（多帧融合取最小距离），N 限制匹配延迟
+    candidates.sort(key=lambda c: c[2], reverse=True)
+    probes = [(tmpl, hand) for _, tmpl, _, hand in candidates[: config.VERIFY_PROBE_FRAMES]]
+
+    matched, user, distance, threshold, hand_side = _match_against_gallery(probes)
     user_id = user["id"] if user else None
     repo.add_log(
         user_id=user_id,
