@@ -89,8 +89,8 @@ Invoke-WebRequest -Uri "https://storage.googleapis.com/mediapipe-models/hand_lan
 2. **前后端端口已统一为 5000。**
    `config.py` 里 `SERVER_PORT` 默认 `5000`，`frontend/vite.config.ts` 的 `/api`、`/video_feed` 也代理到 `http://localhost:5000`，两边对齐，无需再手动设 `SERVER_PORT`。
 
-3. **默认用 MockBridge（不接真硬件）。**
-   `server/app.py` 的 `main()` 用 `use_serial=False`，开锁命令只打印日志，不发串口。接真 STM32 见文末「接入真实硬件」。
+3. **默认用 MockBridge（不接真硬件），前端可一键切换。**
+   `server/app.py` 的 `main()` 根据 `config.get_serial_enabled()` 决定是否启用串口（默认启用）。未接 STM32 时串口连接失败会保留 SerialBridge 让前端显示"连接失败"状态，不会静默降级。前端顶栏有「串口」开关，可运行时热切换 Mock/Serial，无需改代码。接真 STM32 见文末「接入真实硬件」。
 
 ---
 
@@ -120,6 +120,7 @@ curl http://localhost:5000/api/health
   - `GET /api/preview_status` 实时放手引导（轻量探测，不比对）
   - `GET /api/detect_stats` ROI 检测各阶段成功/拒识计数直方图（诊断用，`?reset=1` 读后清零）
   - `GET /api/cameras`、`POST /api/camera/select` 摄像头探测与切换
+  - `GET /api/hardware/config`、`POST /api/hardware/config` 串口硬件开关读取/切换（前端顶栏「串口」开关调用）
   - `GET /api/health` 健康检查
 
 ---
@@ -198,12 +199,12 @@ CompCode 无需训练，只需「标定阈值 + 评估」。产物写入 `data\r
 
 ## 接入真实硬件（STM32）
 
-默认是 Mock，不发串口。接真 STM32 时：
+接真 STM32 时：
 
 1. 用 Type-C 线把 STM32 连上电脑，确认串口出现（设备管理器里的 COM 口）。
 2. 在 `config.py` 设串口：`SERIAL_PORT`（如 `"COM5"`，或保持 `"auto"` 取第一个口）、`SERIAL_BAUD = 115200`。
-3. 让后端用 `SerialBridge`：把 `server/app.py` 中 `main()` 里 `create_app()` 改为 `create_app(use_serial=True)`。
-   - 注意：串口连接失败会自动回退到 MockBridge（见 `hardware/bridge.py` 的 `create_bridge`），所以接不上时不会崩，但也不会真开锁——看日志确认走的是 Serial 还是 Mock。
+3. 串口开关默认启用（`config.get_serial_enabled()`），启动后自动尝试连接。也可在前端顶栏「串口」checkbox 运行时热切换——关掉即切回 MockBridge（只打印日志），打开即重新连接真实串口。开关状态持久化到 `data/reports/hardware.json`，下次启动自动生效。
+   - 注意：串口连接失败时**不再静默降级**到 MockBridge，而是保留 SerialBridge 实例，前端会显示串口"连接失败"状态。这样能明确暴露问题，而非悄悄用 Mock 开锁。
 
 串口协议（PC → STM32，ASCII 行协议，`\n` 结尾）见 `docs/INTERFACE_CONTRACT.md` 契约 A：
 `UNLOCK <ms>` 开锁、`OK` 成功指示、`FAIL` 失败指示、`PING`→`PONG` 健康检查。
@@ -221,4 +222,5 @@ CompCode 无需训练，只需「标定阈值 + 评估」。产物写入 `data\r
 | 同一个人验证距离总贴着阈值 | 仓库自带阈值来自公开数据集。用 `scripts\calibrate_live.py` 在本机实采重新标定 |
 | `cv2` 报错 / `__version__` 缺失 | `opencv-python` 和 `opencv-contrib-python` 装重了。两个都卸掉，只重装 `opencv-contrib-python` |
 | `pnpm` 不存在 | 用 `npm install` / `npm run dev` 代替，或先 `npm i -g pnpm` |
-| `hardware.enabled:false` 但想开锁 | 默认 MockBridge 只打印日志。见上「接入真实硬件」 |
+| `hardware.enabled:false` 但想开锁 | 前端顶栏「串口」开关已关闭。勾选开启即可，或见上「接入真实硬件」 |
+| 串口显示"连接失败" | STM32 没接 / COM 口错 / 波特率不对。确认设备管理器里有 COM 口，`config.py` 的 `SERIAL_PORT` 和 `SERIAL_BAUD` 与 STM32 一致 |
