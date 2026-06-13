@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 
 import config
@@ -90,22 +91,32 @@ class SerialBridge(HardwareBridge):
         if self._ser is None or not self._ser.is_open:
             return False
         try:
-            self._ser.write(b"PING\n")
-            line = self._ser.readline().decode("utf-8", errors="ignore").strip()
-            return line == "PONG"
+            # 不发 PING（STM32 固件不支持），用 reset_input_buffer 触发真实 I/O
+            # 检测 USB 物理断开（write(b"") 在 Windows 上断线后仍不抛异常）
+            self._ser.reset_input_buffer()
+            return True
         except Exception:
             return False
 
-    def _send(self, cmd: str) -> None:
+    def _send(self, cmd: str) -> str:
+        """发送命令并读取 STM32 回复。返回回复文本（可能为空）。"""
         if self._ser is None or not self._ser.is_open:
             raise RuntimeError("serial not connected")
-        self._ser.write(cmd.encode("utf-8"))
+        data = (cmd.strip() + "\r\n").encode("utf-8")
+        self._ser.write(data)
+        self._ser.flush()
+        time.sleep(0.1)  # 给 STM32 留响应时间
+        reply = self._ser.read_all().decode("utf-8", errors="ignore").strip()
+        if reply:
+            logger.info("[SerialBridge] %s -> %s", cmd.strip(), reply)
+        return reply
 
     def unlock(self, duration_ms: int) -> None:
-        self._send(f"UNLOCK {duration_ms}\n")
+        # STM32 固件只认 OPEN，不支持时长参数；开锁时长由固件端决定
+        self._send("OPEN")
 
     def indicate(self, success: bool) -> None:
-        self._send("OK\n" if success else "FAIL\n")
+        self._send("OK" if success else "FAIL")
 
     def status(self) -> dict:
         connected = self._ser is not None and self._ser.is_open

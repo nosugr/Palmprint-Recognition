@@ -90,7 +90,7 @@ function onImageError() {
 }
 
 // 调试：显示后端识别到的手掌轮廓/指尖几何（叠加在视频流上）
-const debug = ref(false)
+const debug = ref(true)
 const feedUrl = computed(() => (debug.value ? '/video_feed?debug=1' : '/video_feed'))
 function onDebugToggle() {
   failed.value = false
