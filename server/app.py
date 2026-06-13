@@ -32,7 +32,7 @@ def create_app(
     except (RuntimeError, ValueError):
         camera = create_camera(prefer_webcam=False, fallback_dir=fallback, index=cam_index)
 
-    bridge = create_bridge(use_serial=use_serial)
+    bridge = create_bridge(use_serial=use_serial or config.get_serial_enabled())
 
     app.extensions["repo"] = repo
     app.extensions["camera"] = camera

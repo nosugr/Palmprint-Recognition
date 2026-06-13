@@ -19,6 +19,7 @@ const naiveTheme = computed(() => (theme.value === 'dark' ? darkTheme : null))
 
 // 硬件状态轮询
 const hardware = ref<HardwareStatus | null>(null)
+const serialEnabled = ref(true)
 let healthTimer: ReturnType<typeof setInterval> | null = null
 
 async function fetchHealth() {
@@ -30,8 +31,28 @@ async function fetchHealth() {
   }
 }
 
+async function fetchHardwareConfig() {
+  try {
+    const cfg = await api.getHardwareConfig()
+    serialEnabled.value = cfg.serial_enabled
+  } catch {
+    // 静默失败
+  }
+}
+
+async function toggleSerial() {
+  try {
+    const resp = await api.setHardwareConfig(serialEnabled.value)
+    hardware.value = resp.hardware
+  } catch {
+    // 切换失败时恢复原状态
+    serialEnabled.value = !serialEnabled.value
+  }
+}
+
 onMounted(() => {
   fetchHealth()
+  fetchHardwareConfig()
   healthTimer = setInterval(fetchHealth, 5000)
 })
 
@@ -64,6 +85,10 @@ const hwIndicator = computed(() => {
                 <span class="hw-dot"></span>
                 <span class="hw-label">{{ hwIndicator.label }}</span>
               </div>
+              <label class="serial-toggle" title="串口硬件开关">
+                <input type="checkbox" v-model="serialEnabled" @change="toggleSerial" />
+                <span class="serial-toggle-label">串口</span>
+              </label>
               <ThemeToggle />
             </div>
           </div>
@@ -196,6 +221,35 @@ const hwIndicator = computed(() => {
 @keyframes hw-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50%      { transform: scale(0.8); opacity: 0.5; }
+}
+
+/* 串口开关 */
+.serial-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+.serial-toggle:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.serial-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--color-text);
+}
+.serial-toggle-label {
+  white-space: nowrap;
 }
 
 /* 填充药丸标签 */

@@ -331,3 +331,33 @@ def health():
             "hardware": bridge.status(),
         }
     )
+
+
+@api.get("/hardware/config")
+def hardware_config_get():
+    return _ok({"serial_enabled": config.get_serial_enabled()})
+
+
+@api.post("/hardware/config")
+def hardware_config_set():
+    body = request.get_json(silent=True) or {}
+    if "serial_enabled" not in body:
+        return _err("serial_enabled is required")
+
+    enabled = bool(body["serial_enabled"])
+    config.save_serial_enabled(enabled)
+
+    # 热切换 bridge
+    app = current_app._get_current_object()
+    old_bridge = app.extensions["bridge"]
+    try:
+        old_bridge.close()
+    except Exception:
+        pass
+
+    from hardware.bridge import create_bridge
+
+    new_bridge = create_bridge(use_serial=enabled)
+    app.extensions["bridge"] = new_bridge
+
+    return _ok({"serial_enabled": enabled, "hardware": new_bridge.status()})

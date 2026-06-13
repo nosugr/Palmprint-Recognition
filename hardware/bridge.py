@@ -123,7 +123,10 @@ def create_bridge(use_serial: bool = False) -> HardwareBridge:
     try:
         bridge.connect()
     except Exception as exc:
-        logger.warning("hardware bridge connect failed (%s), fallback to MockBridge", exc)
-        bridge = MockBridge()
-        bridge.connect()
+        if use_serial:
+            # 不降级，保留 SerialBridge 让前端显示"连接失败"
+            logger.warning("serial connect failed: %s", exc)
+        else:
+            bridge = MockBridge()
+            bridge.connect()
     return bridge

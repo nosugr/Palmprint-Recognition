@@ -104,3 +104,27 @@ def get_match_threshold() -> float:
         data = json.loads(_CALIBRATION_PATH.read_text(encoding="utf-8"))
         return float(data["threshold"])
     return MATCH_THRESHOLD
+
+
+_HARDWARE_STATE_PATH = BASE_DIR / "data" / "reports" / "hardware.json"
+
+
+def get_serial_enabled() -> bool:
+    """读取串口开关，默认 True"""
+    if _HARDWARE_STATE_PATH.exists():
+        import json
+
+        try:
+            data = json.loads(_HARDWARE_STATE_PATH.read_text(encoding="utf-8"))
+            return bool(data.get("serial_enabled", True))
+        except (ValueError, KeyError, OSError):
+            pass
+    return True
+
+
+def save_serial_enabled(enabled: bool) -> None:
+    """保存串口开关"""
+    import json
+
+    _HARDWARE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _HARDWARE_STATE_PATH.write_text(json.dumps({"serial_enabled": enabled}), encoding="utf-8")

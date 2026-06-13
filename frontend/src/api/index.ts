@@ -66,6 +66,15 @@ export interface HealthResp {
   hardware: HardwareStatus
 }
 
+export interface HardwareConfig {
+  serial_enabled: boolean
+}
+
+export interface HardwareConfigSetResp {
+  serial_enabled: boolean
+  hardware: HardwareStatus
+}
+
 interface ApiEnvelope<T> {
   ok: boolean
   data: T
@@ -116,6 +125,15 @@ export const api = {
     return request<{ index: number }>('/api/camera/select', {
       method: 'POST',
       body: JSON.stringify({ index }),
+    })
+  },
+  getHardwareConfig() {
+    return request<HardwareConfig>('/api/hardware/config')
+  },
+  setHardwareConfig(serialEnabled: boolean) {
+    return request<HardwareConfigSetResp>('/api/hardware/config', {
+      method: 'POST',
+      body: JSON.stringify({ serial_enabled: serialEnabled }),
     })
   },
 }
